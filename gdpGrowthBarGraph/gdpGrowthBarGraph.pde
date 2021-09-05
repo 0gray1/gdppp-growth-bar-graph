@@ -2,18 +2,23 @@
 
 // Variables below can be customized
 String title = "GDP Per Capita Growth (2000-2020)";
-String subtitle = "Each country's GDP Per Capita is shown in parantheses";
-// String subtitle = "*This chart only includes countries with a Per Capita GDP of 10,000 USD or more. Each country's current GDP Per Capita is shown in parantheses."; 
-float scale = 3;  // Controls the size of the bar graph, default (scale=1) is 1600 * 900
+String subtitle = "Each country's current GDP Per Capita is shown in parentheses";
+// String subtitle = "*This chart only includes countries with a GDP Per Capita of 10,000 USD or more. Each country's current GDP Per Capita is shown in parentheses."; 
+float scale = 0.8;  // Controls the size of the bar graph, default (scale=1) is 1600 pixels wide for 20 bars
 boolean saveFile = true; // Save the image as png. This make take a few seconds for very high resolutions
 boolean restrictCountries = false; // Only allow countries with gdppp of 10k or more to appear
 
+// Controls the top rank and bottom rank shown (respectively, starting from 0)
+int sliceMin = 0;
+int sliceMax = 20;
+
 // All of these control the size/position of the square that
 // Contains all of the bars
+int numBars = sliceMax - sliceMin;
 float yMin = 100 * scale;
-float yMax = 875 * scale;
+float yMax = (775 * scale * numBars / 20) + yMin;
 float xMin = 150 * scale;
-float xMax = 1450 * scale;
+float xMax = (1300 * scale * sqrt(numBars / 20)) + xMin;
 
 float padding = 10 * scale; // Space between bars (vertical)
 float flagPadding = 4 * scale; // Space between the flag and the outside of the bar (horizontal & vertical)
@@ -21,8 +26,6 @@ float textPaddingLeft = 10 * scale; // Space between the country name text and t
 float textPaddingRight = 5 * scale; // Space between the number of users text and the bar (horizontal)
 
 int backgroundColor = 255;
-int sliceMin = 0;
-int sliceMax = 20;
 
 // Don't touch these
 float highestGrowth;
@@ -31,11 +34,12 @@ float[] gdppp;
 String[] countries;
 PImage[] flags;
 color[] flagColors;
+boolean includesSubtitle;
 Data data;
 
 void settings() {
-  int w = round(1600 * scale);
-  int h = round(900 * scale);
+  int w = round(xMax + xMin);
+  int h = round(yMax + yMin / 2);
   size(w, h);
 }
 
@@ -45,33 +49,32 @@ void setup() {
   growth = data.growth();
   gdppp = data.gdppp();
   
-  int sliceLength = sliceMax - sliceMin;
-  flags = new PImage[sliceLength];
-  flagColors = new color[sliceLength];
-  for (int i = sliceMin; i < sliceMax; i++) {
-    String country = countries[i-sliceMin];
-    flags[i-sliceMin] = getFlag(country);
-    flagColors[i-sliceMin] = averagePixelColor(flags[i-sliceMin]);
+  flags = new PImage[numBars];
+  flagColors = new color[numBars];
+  for (int i = 0; i < numBars; i++) {
+    String country = countries[i];
+    flags[i] = getFlag(country);
+    flagColors[i] = averagePixelColor(flags[i]);
   }
   highestGrowth = data.table.getFloat(0, "Growth");
   
-  if (!subtitle.equals("")) {
+  includesSubtitle = !subtitle.equals("");
+  if (includesSubtitle)
     yMin += 50;
-  }
 }
 
 void draw() {
   background(backgroundColor);
   noStroke();
-  int size = sliceMax - sliceMin;
+  
   float totalSpace = yMax - yMin;
   float maxWidth = xMax - xMin;
-  float paddingSpace =  padding * size;
-  float barSpace = totalSpace - paddingSpace;
-  float barHeightTotal = totalSpace / size; // Height of bar including padding
-  float barHeight = barSpace / size; // Height of bar excluding padding
+  float paddingSpace =  padding * (numBars - 1); // Total space that is empty (between the bars)
+  float barSpace = totalSpace - paddingSpace; // Total space that isn't empty
+  float barHeightTotal = totalSpace / numBars; // Height of bar including padding
+  float barHeight = barSpace / numBars; // Height of bar excluding padding
   
-  for (int i = 0; i < size; i++) {
+  for (int i = 0; i < numBars; i++) {
     String country = countries[i];
     PImage flag = flags[i];
     color flagColor = flagColors[i];
@@ -93,22 +96,22 @@ void draw() {
     fill(flagColor);
     rect(xMin, startY + yMin, barWidth, barHeight);
     
-    float imWidth = flag.width;
-    float imHeight = flag.height;
-    float desiredHeight = barHeight - flagPadding * 2;
-    float adjustedWidth = (desiredHeight / imHeight) * imWidth;
+    // Set the flag height such that it fits within the rectangle
+    float flagHeight = barHeight - flagPadding * 2;
+    // Adjust the flag width so that it keeps the same aspect ratio
+    float flagWidth = (flagHeight / flag.height) * flag.width;
     
-    float flagX = xMin + barWidth - adjustedWidth - flagPadding;
+    float flagX = xMin + barWidth - flagWidth - flagPadding;
     float flagY = startY + yMin + flagPadding;
     
-    // Flag
     fill(0);
-    rect(flagX-scale, flagY-scale, adjustedWidth+2*scale, desiredHeight+2*scale);
-    image(flag, flagX, flagY, adjustedWidth, desiredHeight);
+    // Set a border around the flag with a thickness of `scale`
+    rect(flagX-scale, flagY-scale, flagWidth+2*scale, flagHeight+2*scale);
+    image(flag, flagX, flagY, flagWidth, flagHeight);
     
     // So flags don't overflow past the edge
     fill(backgroundColor);
-    rect(0, yMin + barHeightTotal * i, xMin, barHeightTotal);
+    rect(0, yMin + startY, xMin, barHeightTotal);
     
     // Country name (on the left of the bar)
     fill(flagColor);
@@ -119,10 +122,11 @@ void draw() {
     // GDPPP growth + current GDPPP (on the right of the bar)
     textAlign(LEFT, CENTER);
     textSize(12 * scale);
+    // Format it like 12087.3 -> 12,100 USD
     int gdpEstimateInt = round(gdppp[i] / 100) * 100;
     String gdpEstimate = addComma(str(gdpEstimateInt));
     String description = "+" + round(growth[i]) + "% (" + gdpEstimate + " USD)";
-    text(description, xMin + barWidth + textPaddingRight, startY + yMin + barHeight / 2 - 3);
+    text(description, xMin + barWidth + textPaddingRight, startY + yMin + barHeight / 2 - 3 * scale);
   }
   
   // Title
@@ -130,12 +134,11 @@ void draw() {
   textAlign(CENTER, CENTER);
   textSize(32 * scale);
   float yPos = yMin/2;
-  if (!subtitle.equals("")) {
+  if (includesSubtitle)
     yPos = yMin/3;
-  }
   text(title, width / 2, yPos);
   
-  if (!subtitle.equals("")) {
+  if (includesSubtitle) {
     textSize(16 * scale);
     fill(128);
     // 33% for title, 67% for subtitle
@@ -144,6 +147,7 @@ void draw() {
   
   if (saveFile) {
     saveFrame(title + ".png");
+    // Only save once
     saveFile = false;
   }
 }

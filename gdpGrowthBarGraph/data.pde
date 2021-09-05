@@ -10,9 +10,9 @@ class Data {
   
   // rangeMin = start row, rangeMax = end row
   Data(int rangeMin, int rangeMax, boolean restrictCountries) {
-    String path = "../gdppp_growth.csv";
+    String path = "../gdppp-growth.csv";
     if (restrictCountries)
-      path = "../gdppp_growth_10k_only.csv";
+      path = "../gdppp-growth-10k-only.csv";
     table = loadTable(path, "header");
     // Removing columns outside of (rangeMin, rangeMax)
     filterColumns(rangeMin, rangeMax);
